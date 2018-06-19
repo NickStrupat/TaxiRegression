@@ -62,8 +62,8 @@ namespace TaxiFarePrediction
                 Console.Write("Begin test...");
                 var what = model.Predict(taxiTripTests.Select(x => x.taxiTrip)).ToList();
                 Parallel.ForEach(what, (x,state, i) => taxiTripTests[(int)i].taxiTripFarePrediction = x);
-                
                 Console.WriteLine("Done.");
+
                 var diffs = taxiTripTests.Select(x => Math.Abs(x.taxiTrip.FareAmount - x.taxiTripFarePrediction.FareAmount))
                                          .AsParallel()
                                          .OrderBy(x => x)
@@ -71,8 +71,8 @@ namespace TaxiFarePrediction
                 var okay = diffs.Take(diffs.Count - 2)
                                 .Where((x, i) => x > 0.75 & x < 450)
                                 .Where((x, i) => i % 1000 == 0)
-                                .Select((x, i) => i + "," + x)
-                                .ToList();
+                                .Select((x, i) => i + "," + x);
+                                
                 File.WriteAllLines($@".\Data\{regressorType.Name}_ModelErrors.csv", okay);
                 Console.WriteLine(taxiTripTests.Min(x => Math.Abs(x.taxiTrip.FareAmount - x.taxiTripFarePrediction.FareAmount)));
                 Console.WriteLine(taxiTripTests.Max(x => Math.Abs(x.taxiTrip.FareAmount - x.taxiTripFarePrediction.FareAmount)));
@@ -83,10 +83,15 @@ namespace TaxiFarePrediction
         public static PredictionModel<TaxiTrip, TaxiTripFarePrediction> Train<TRegressor>()
         where TRegressor : ILearningPipelineItem, new()
         {
-            var modelLoaded = PredictionModel.ReadAsync<TaxiTrip, TaxiTripFarePrediction>(Path.Combine(BasePath, typeof(TRegressor).Name) + ".zip").Result;
-            return modelLoaded;
+            var path = Path.Combine(BasePath, typeof(TRegressor).Name) + ".zip";
+            if (File.Exists(path))
+			{
+                Console.Write($"Loading model from `{path}`...");
+				var modelLoaded = PredictionModel.ReadAsync<TaxiTrip, TaxiTripFarePrediction>(path).Result;
+                Console.WriteLine("Done.");
+			    return modelLoaded;
+			}
 
-            //var what = modelLoaded.Predict()
             var pipeline = new LearningPipeline
             {
                 new TextLoader(_datapath).CreateFrom<TaxiTrip>(useHeader: true, separator: ','),
@@ -99,9 +104,9 @@ namespace TaxiFarePrediction
                 new ColumnConcatenator("Features"
                     // ,"VendorId"
                     // ,"RateCode"
-                    ,nameof(TaxiTrip.PassengerCount)
-                    ,nameof(TaxiTrip.TripTime)
-                    ,nameof(TaxiTrip.TripDistance)
+                    ,"PassengerCount"
+                    ,"TripTime"
+                    ,"TripDistance"
                     // ,"PaymentType"
                 ),
                 new TRegressor()
